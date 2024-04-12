@@ -1,0 +1,87 @@
+import numpy as np
+from collections import Counter
+
+class Node:
+    def __init__(self, attribute):
+        self.attribute = attribute
+        self.children = {}
+        self.result = None
+
+def entropy(class_labels):
+    class_counts = Counter(class_labels)
+    class_probabilities = [class_counts[label] / len(class_labels) for label in class_counts]
+    return -np.sum(p * np.log2(p) for p in class_probabilities)
+
+def information_gain(data, attribute_index, class_index):
+    total_entropy = entropy(data[:, class_index])
+    values, counts = np.unique(data[:, attribute_index], return_counts=True)
+    weighted_entropy = np.sum((counts[i] / np.sum(counts)) * entropy(
+        data[data[:, attribute_index] == values[i]][:, class_index]
+    ) for i in range(len(values)))
+    return total_entropy - weighted_entropy
+
+def ID3(data, attributes, class_index):
+    class_labels = data[:, class_index]
+    if len(set(class_labels)) == 1:
+        node = Node(None)
+        node.result = class_labels[0]
+        return node
+    if len(attributes) == 0:
+        node = Node(None)
+        node.result = max(set(class_labels), key=list(class_labels).count)
+        return node
+
+    gains = [information_gain(data, i, class_index) for i in attributes]
+    best_attribute_index = attributes[np.argmax(gains)]
+
+    node = Node(best_attribute_index)
+    for value in np.unique(data[:, best_attribute_index]):
+        subset = data[data[:, best_attribute_index] == value]
+        if len(subset) == 0:
+            node.children[value] = Node(None)
+            node.children[value].result = max(set(class_labels), key=list(class_labels).count)
+        else:
+            remaining_attributes = [a for a in attributes if a != best_attribute_index]
+            node.children[value] = ID3(subset, remaining_attributes, class_index)
+    return node
+
+# Example usage
+data = np.array([
+    ['Sunny', 'Hot', 'High', 'Weak', 'No'],
+    ['Sunny', 'Hot', 'High', 'Strong', 'No'],
+    ['Overcast', 'Hot', 'High', 'Weak', 'Yes'],
+    ['Rain', 'Mild', 'High', 'Weak', 'Yes'],
+    ['Rain', 'Cool', 'Normal', 'Weak', 'Yes'],
+    ['Rain', 'Cool', 'Normal', 'Strong', 'No'],
+    ['Overcast', 'Cool', 'Normal', 'Strong', 'Yes'],
+    ['Sunny', 'Mild', 'High', 'Weak', 'No'],
+    ['Sunny', 'Cool', 'Normal', 'Weak', 'Yes'],
+    ['Rain', 'Mild', 'Normal', 'Weak', 'Yes'],
+    ['Sunny', 'Mild', 'Normal', 'Strong', 'Yes'],
+    ['Overcast', 'Mild', 'High', 'Strong', 'Yes'],
+    ['Overcast', 'Hot', 'Normal', 'Weak', 'Yes'],
+    ['Rain', 'Mild', 'High', 'Strong', 'No']
+])
+
+# Convert categorical variables into numerical labels
+label_dict = {}
+for i in range(data.shape[1]):
+    labels, uniques = np.unique(data[:, i], return_inverse=True)
+    data[:, i] = uniques
+    label_dict[i] = labels
+
+attributes = list(range(data.shape[1] - 1))
+class_index = -1
+
+tree = ID3(data, attributes, class_index)
+
+def print_tree(node, depth=0):
+    if node.result is not None:
+        print('  ' * depth, 'Result:', label_dict[len(label_dict) - 1][int(node.result)])
+    else:
+        print('  ' * depth, 'Attribute:', label_dict[node.attribute])
+        for value, child_node in node.children.items():
+            print('  ' * (depth + 1), label_dict[node.attribute][int(value)])
+            print_tree(child_node, depth + 2)
+
+print_tree(tree)
